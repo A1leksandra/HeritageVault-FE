@@ -7,6 +7,11 @@ import {
   Switch,
   FormControlLabel,
   TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  CircularProgress,
 } from '@mui/material';
 import { DataGrid, GridActionsCellItem } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
@@ -24,29 +29,51 @@ import {
 import { getErrorMessage } from '../api/http';
 import type { CityListItemDto, CityDetailsDto } from '../types';
 import { toNumberId } from '../utils';
+import { useLocationDropdowns } from '../hooks/useLocationDropdowns';
 
 export function CitiesPage() {
   const { showToast } = useToast();
+  const {
+    countries,
+    regions,
+    loadingCountries,
+    loadingRegions,
+    loadRegions,
+  } = useLocationDropdowns();
+
   const [cities, setCities] = useState<CityListItemDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [includeDeleted, setIncludeDeleted] = useState(false);
-  const [countryIdFilter, setCountryIdFilter] = useState<string>('');
-  const [regionIdFilter, setRegionIdFilter] = useState<string>('');
+  const [countryIdFilter, setCountryIdFilter] = useState<number | string | ''>('');
+  const [regionIdFilter, setRegionIdFilter] = useState<number | string | ''>('');
   const [nameContainsFilter, setNameContainsFilter] = useState<string>('');
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState<CityDetailsDto | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cityToDelete, setCityToDelete] = useState<number | string | null>(null);
 
+  // Load regions when country filter changes
+  useEffect(() => {
+    if (countryIdFilter) {
+      loadRegions(countryIdFilter);
+      // Clear region filter when country changes
+      if (regionIdFilter) {
+        setRegionIdFilter('');
+      }
+    } else {
+      loadRegions(null);
+    }
+  }, [countryIdFilter]);
+
   const loadCities = async () => {
     setLoading(true);
     try {
       const query: any = { IncludeDeleted: includeDeleted };
       if (countryIdFilter) {
-        query.CountryId = Number(countryIdFilter);
+        query.CountryId = toNumberId(countryIdFilter);
       }
       if (regionIdFilter) {
-        query.RegionId = Number(regionIdFilter);
+        query.RegionId = toNumberId(regionIdFilter);
       }
       if (nameContainsFilter) {
         query.NameContains = nameContainsFilter;
@@ -152,22 +179,50 @@ export function CitiesPage() {
         </Button>
       </Box>
       <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-        <TextField
-          label="Country ID"
-          type="number"
-          size="small"
-          value={countryIdFilter}
-          onChange={(e) => setCountryIdFilter(e.target.value)}
-          sx={{ width: 120 }}
-        />
-        <TextField
-          label="Region ID"
-          type="number"
-          size="small"
-          value={regionIdFilter}
-          onChange={(e) => setRegionIdFilter(e.target.value)}
-          sx={{ width: 120 }}
-        />
+        <FormControl size="small" sx={{ width: 180 }}>
+          <InputLabel>Country</InputLabel>
+          <Select
+            value={countryIdFilter}
+            label="Country"
+            onChange={(e) => setCountryIdFilter(e.target.value || '')}
+            disabled={loadingCountries}
+          >
+            <MenuItem value="">All</MenuItem>
+            {loadingCountries ? (
+              <MenuItem disabled>
+                <CircularProgress size={20} />
+              </MenuItem>
+            ) : (
+              countries.map((country) => (
+                <MenuItem key={toNumberId(country.id)} value={toNumberId(country.id)}>
+                  {country.name} ({country.code})
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ width: 180 }}>
+          <InputLabel>Region</InputLabel>
+          <Select
+            value={regionIdFilter}
+            label="Region"
+            onChange={(e) => setRegionIdFilter(e.target.value || '')}
+            disabled={!countryIdFilter || loadingRegions}
+          >
+            <MenuItem value="">All</MenuItem>
+            {loadingRegions ? (
+              <MenuItem disabled>
+                <CircularProgress size={20} />
+              </MenuItem>
+            ) : (
+              regions.map((region) => (
+                <MenuItem key={toNumberId(region.id)} value={toNumberId(region.id)}>
+                  {region.name}
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
         <TextField
           label="Name Contains"
           size="small"

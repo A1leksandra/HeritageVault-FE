@@ -6,7 +6,11 @@ import {
   Box,
   Switch,
   FormControlLabel,
-  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  CircularProgress,
 } from '@mui/material';
 import { DataGrid, GridActionsCellItem } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
@@ -24,13 +28,16 @@ import {
 import { getErrorMessage } from '../api/http';
 import type { RegionListItemDto, RegionDetailsDto } from '../types';
 import { toNumberId } from '../utils';
+import { useLocationDropdowns } from '../hooks/useLocationDropdowns';
 
 export function RegionsPage() {
   const { showToast } = useToast();
+  const { countries, loadingCountries } = useLocationDropdowns();
+
   const [regions, setRegions] = useState<RegionListItemDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [includeDeleted, setIncludeDeleted] = useState(false);
-  const [countryIdFilter, setCountryIdFilter] = useState<string>('');
+  const [countryIdFilter, setCountryIdFilter] = useState<number | string | ''>('');
   const [formOpen, setFormOpen] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState<RegionDetailsDto | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -41,7 +48,7 @@ export function RegionsPage() {
     try {
       const query: any = { IncludeDeleted: includeDeleted };
       if (countryIdFilter) {
-        query.CountryId = Number(countryIdFilter);
+        query.CountryId = toNumberId(countryIdFilter);
       }
       const data = await getRegions(query);
       setRegions(data);
@@ -140,14 +147,28 @@ export function RegionsPage() {
           Regions
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <TextField
-            label="Country ID"
-            type="number"
-            size="small"
-            value={countryIdFilter}
-            onChange={(e) => setCountryIdFilter(e.target.value)}
-            sx={{ width: 120 }}
-          />
+          <FormControl size="small" sx={{ width: 180 }}>
+            <InputLabel>Country</InputLabel>
+            <Select
+              value={countryIdFilter}
+              label="Country"
+              onChange={(e) => setCountryIdFilter(e.target.value || '')}
+              disabled={loadingCountries}
+            >
+              <MenuItem value="">All</MenuItem>
+              {loadingCountries ? (
+                <MenuItem disabled>
+                  <CircularProgress size={20} />
+                </MenuItem>
+              ) : (
+                countries.map((country) => (
+                  <MenuItem key={toNumberId(country.id)} value={toNumberId(country.id)}>
+                    {country.name} ({country.code})
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
           <FormControlLabel
             control={
               <Switch checked={includeDeleted} onChange={(e) => setIncludeDeleted(e.target.checked)} />

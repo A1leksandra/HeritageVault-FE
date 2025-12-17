@@ -10,6 +10,7 @@ import {
   FormControl,
   InputLabel,
   Avatar,
+  CircularProgress,
 } from '@mui/material';
 import { DataGrid, GridActionsCellItem } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
@@ -36,15 +37,27 @@ import {
   getEnumOptions,
   getImageUrl,
 } from '../utils';
+import { useLocationDropdowns } from '../hooks/useLocationDropdowns';
 
 export function LandmarksPage() {
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const {
+    countries,
+    regions,
+    cities,
+    loadingCountries,
+    loadingRegions,
+    loadingCities,
+    loadRegions,
+    loadCities,
+  } = useLocationDropdowns();
+
   const [landmarks, setLandmarks] = useState<LandmarkListItemDto[]>([]);
   const [loading, setLoading] = useState(false);
-  const [cityIdFilter, setCityIdFilter] = useState<string>('');
-  const [countryIdFilter, setCountryIdFilter] = useState<string>('');
-  const [regionIdFilter, setRegionIdFilter] = useState<string>('');
+  const [countryIdFilter, setCountryIdFilter] = useState<number | string | ''>('');
+  const [regionIdFilter, setRegionIdFilter] = useState<number | string | ''>('');
+  const [cityIdFilter, setCityIdFilter] = useState<number | string | ''>('');
   const [nameContainsFilter, setNameContainsFilter] = useState<string>('');
   const [protectionStatusFilter, setProtectionStatusFilter] = useState<number | ''>('');
   const [physicalConditionFilter, setPhysicalConditionFilter] = useState<number | ''>('');
@@ -54,18 +67,48 @@ export function LandmarksPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [landmarkToDelete, setLandmarkToDelete] = useState<number | string | null>(null);
 
+  // Load regions when country filter changes
+  useEffect(() => {
+    if (countryIdFilter) {
+      loadRegions(countryIdFilter);
+      // Clear region and city filters when country changes
+      if (regionIdFilter) {
+        setRegionIdFilter('');
+      }
+      if (cityIdFilter) {
+        setCityIdFilter('');
+      }
+    } else {
+      loadRegions(null);
+      loadCities(null, null);
+    }
+  }, [countryIdFilter]);
+
+  // Load cities when country or region filter changes
+  useEffect(() => {
+    if (countryIdFilter) {
+      loadCities(countryIdFilter, regionIdFilter || null);
+      // Clear city filter when region changes
+      if (cityIdFilter && !regionIdFilter) {
+        setCityIdFilter('');
+      }
+    } else {
+      loadCities(null, null);
+    }
+  }, [countryIdFilter, regionIdFilter]);
+
   const loadLandmarks = async () => {
     setLoading(true);
     try {
       const query: any = {};
       if (cityIdFilter) {
-        query.CityId = Number(cityIdFilter);
+        query.CityId = toNumberId(cityIdFilter);
       }
       if (countryIdFilter) {
-        query.CountryId = Number(countryIdFilter);
+        query.CountryId = toNumberId(countryIdFilter);
       }
       if (regionIdFilter) {
-        query.RegionId = Number(regionIdFilter);
+        query.RegionId = toNumberId(regionIdFilter);
       }
       if (nameContainsFilter) {
         query.NameContains = nameContainsFilter;
@@ -227,30 +270,74 @@ export function LandmarksPage() {
         </Button>
       </Box>
       <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-        <TextField
-          label="City ID"
-          type="number"
-          size="small"
-          value={cityIdFilter}
-          onChange={(e) => setCityIdFilter(e.target.value)}
-          sx={{ width: 120 }}
-        />
-        <TextField
-          label="Country ID"
-          type="number"
-          size="small"
-          value={countryIdFilter}
-          onChange={(e) => setCountryIdFilter(e.target.value)}
-          sx={{ width: 120 }}
-        />
-        <TextField
-          label="Region ID"
-          type="number"
-          size="small"
-          value={regionIdFilter}
-          onChange={(e) => setRegionIdFilter(e.target.value)}
-          sx={{ width: 120 }}
-        />
+        <FormControl size="small" sx={{ width: 180 }}>
+          <InputLabel>Country</InputLabel>
+          <Select
+            value={countryIdFilter}
+            label="Country"
+            onChange={(e) => setCountryIdFilter(e.target.value || '')}
+            disabled={loadingCountries}
+          >
+            <MenuItem value="">All</MenuItem>
+            {loadingCountries ? (
+              <MenuItem disabled>
+                <CircularProgress size={20} />
+              </MenuItem>
+            ) : (
+              countries.map((country) => (
+                <MenuItem key={toNumberId(country.id)} value={toNumberId(country.id)}>
+                  {country.name} ({country.code})
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ width: 180 }}>
+          <InputLabel>Region</InputLabel>
+          <Select
+            value={regionIdFilter}
+            label="Region"
+            onChange={(e) => setRegionIdFilter(e.target.value || '')}
+            disabled={!countryIdFilter || loadingRegions}
+          >
+            <MenuItem value="">All</MenuItem>
+            {loadingRegions ? (
+              <MenuItem disabled>
+                <CircularProgress size={20} />
+              </MenuItem>
+            ) : (
+              regions.map((region) => (
+                <MenuItem key={toNumberId(region.id)} value={toNumberId(region.id)}>
+                  {region.name}
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ width: 180 }}>
+          <InputLabel>City</InputLabel>
+          <Select
+            value={cityIdFilter}
+            label="City"
+            onChange={(e) => setCityIdFilter(e.target.value || '')}
+            disabled={!countryIdFilter || loadingCities}
+          >
+            <MenuItem value="">All</MenuItem>
+            {loadingCities ? (
+              <MenuItem disabled>
+                <CircularProgress size={20} />
+              </MenuItem>
+            ) : cities.length === 0 ? (
+              <MenuItem disabled>No cities available</MenuItem>
+            ) : (
+              cities.map((city) => (
+                <MenuItem key={toNumberId(city.id)} value={toNumberId(city.id)}>
+                  {city.name}
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
         <TextField
           label="Name Contains"
           size="small"

@@ -5,10 +5,16 @@ import {
   DialogContent,
   DialogTitle,
   TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  CircularProgress,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import type { CityDetailsDto, CreateCityRequest, UpdateCityRequest } from '../../types';
-import { parseNullableNumber } from '../../utils';
+import { parseNullableNumber, toNumberId } from '../../utils';
+import { useLocationDropdowns } from '../../hooks/useLocationDropdowns';
 
 interface CityFormDialogProps {
   open: boolean;
@@ -18,8 +24,16 @@ interface CityFormDialogProps {
 }
 
 export function CityFormDialog({ open, city, onClose, onSave }: CityFormDialogProps) {
-  const [countryId, setCountryId] = useState<number | string>('');
-  const [regionId, setRegionId] = useState<string>('');
+  const {
+    countries,
+    regions,
+    loadingCountries,
+    loadingRegions,
+    loadRegions,
+  } = useLocationDropdowns();
+
+  const [selectedCountryId, setSelectedCountryId] = useState<number | string | ''>('');
+  const [selectedRegionId, setSelectedRegionId] = useState<number | string | ''>('');
   const [name, setName] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
@@ -27,30 +41,43 @@ export function CityFormDialog({ open, city, onClose, onSave }: CityFormDialogPr
 
   useEffect(() => {
     if (city) {
-      setCountryId(city.countryId);
-      setRegionId(city.regionId ? String(city.regionId) : '');
+      setSelectedCountryId(city.countryId);
+      setSelectedRegionId(city.regionId || '');
       setName(city.name);
       setLatitude(city.latitude ? String(city.latitude) : '');
       setLongitude(city.longitude ? String(city.longitude) : '');
     } else {
-      setCountryId('');
-      setRegionId('');
+      setSelectedCountryId('');
+      setSelectedRegionId('');
       setName('');
       setLatitude('');
       setLongitude('');
     }
   }, [city, open]);
 
+  // Load regions when country changes
+  useEffect(() => {
+    if (selectedCountryId) {
+      loadRegions(selectedCountryId);
+      // Clear region when country changes
+      if (selectedRegionId && !city) {
+        setSelectedRegionId('');
+      }
+    } else {
+      loadRegions(null);
+    }
+  }, [selectedCountryId]);
+
   const handleSubmit = async () => {
-    if (!name.trim() || !countryId) {
+    if (!name.trim() || !selectedCountryId) {
       return;
     }
 
     setLoading(true);
     try {
       await onSave({
-        countryId,
-        regionId: regionId ? Number(regionId) : null,
+        countryId: selectedCountryId,
+        regionId: selectedRegionId ? toNumberId(selectedRegionId) : null,
         name: name.trim(),
         latitude: parseNullableNumber(latitude),
         longitude: parseNullableNumber(longitude),
@@ -67,28 +94,51 @@ export function CityFormDialog({ open, city, onClose, onSave }: CityFormDialogPr
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{city ? 'Edit City' : 'Create City'}</DialogTitle>
       <DialogContent>
-        <TextField
-          autoFocus
-          margin="dense"
-          label="Country ID"
-          fullWidth
-          variant="outlined"
-          type="number"
-          value={countryId}
-          onChange={(e) => setCountryId(e.target.value ? Number(e.target.value) : '')}
-          required
-          sx={{ mt: 2 }}
-        />
-        <TextField
-          margin="dense"
-          label="Region ID"
-          fullWidth
-          variant="outlined"
-          type="number"
-          value={regionId}
-          onChange={(e) => setRegionId(e.target.value)}
-          sx={{ mt: 2 }}
-        />
+        <FormControl fullWidth required sx={{ mt: 2 }}>
+          <InputLabel>Country</InputLabel>
+          <Select
+            value={selectedCountryId}
+            label="Country"
+            onChange={(e) => setSelectedCountryId(e.target.value)}
+            disabled={loadingCountries}
+          >
+            {loadingCountries ? (
+              <MenuItem disabled>
+                <CircularProgress size={20} />
+              </MenuItem>
+            ) : (
+              countries.map((country) => (
+                <MenuItem key={toNumberId(country.id)} value={toNumberId(country.id)}>
+                  {country.name} ({country.code})
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
+        <FormControl fullWidth sx={{ mt: 2 }}>
+          <InputLabel>Region</InputLabel>
+          <Select
+            value={selectedRegionId}
+            label="Region"
+            onChange={(e) => setSelectedRegionId(e.target.value || '')}
+            disabled={!selectedCountryId || loadingRegions}
+          >
+            <MenuItem value="">
+              <em>None</em>
+            </MenuItem>
+            {loadingRegions ? (
+              <MenuItem disabled>
+                <CircularProgress size={20} />
+              </MenuItem>
+            ) : (
+              regions.map((region) => (
+                <MenuItem key={toNumberId(region.id)} value={toNumberId(region.id)}>
+                  {region.name}
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
         <TextField
           margin="dense"
           label="Name"
@@ -125,7 +175,7 @@ export function CityFormDialog({ open, city, onClose, onSave }: CityFormDialogPr
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={loading || !name.trim() || !countryId}
+          disabled={loading || !name.trim() || !selectedCountryId}
         >
           Save
         </Button>
@@ -133,4 +183,3 @@ export function CityFormDialog({ open, city, onClose, onSave }: CityFormDialogPr
     </Dialog>
   );
 }
-
